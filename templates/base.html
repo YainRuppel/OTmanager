@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ title or "Deca-app" }}</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Deca-app</h1>
+    <nav>
+      <a href="/">Home</a> |
+      <a href="/ui/tecnicos">ABM Técnicos</a> |
+      <a href="/ui/assign-ot">Asignar OT</a> |
+      <a href="/docs">API Docs</a>
+    </nav>
+    <hr/>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <hr/>
+    <small>Deca-app — práctica FastAPI</small>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>ABM Técnicos</h2>
+
+  <section>
+    <h3>Crear técnico</h3>
+    <form id="create-form">
+      <input type="text" id="nombre" placeholder="Nombre técnico" required/>
+      <button type="submit">Crear</button>
+    </form>
+  </section>
+
+  <section>
+    <h3>Listado</h3>
+    <table border="1" id="tbl">
+      <thead><tr><th>ID</th><th>Nombre</th><th>Acciones</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script src="/static/js/tecnicos.js"></script>
+{% endblock %}

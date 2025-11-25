@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Bienvenido</h2>
+  <p>Pulsa en las opciones del menú para administrar técnicos o asignar OT.</p>
+  <section>
+    <h3>Estado</h3>
+    <div id="status">Cargando...</div>
+  </section>
+  <script>
+    fetch('/health').then(r=>r.json()).then(j=>document.getElementById('status').innerText = JSON.stringify(j));
+  </script>
+{% endblock %}

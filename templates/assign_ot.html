@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Asignación de OT</h2>
+
+  <section>
+    <h3>Crear OT</h3>
+    <form id="ot-form">
+      <label>ID_OT: <input id="id_ot" required></label><br/>
+      <label>Material (SAP):
+        <select id="sap_select"></select>
+      </label><br/>
+      <label>Técnico:
+        <select id="tec_select"></select>
+      </label><br/>
+      <label>Cantidad: <input id="cantidad" value="1" type="number" min="1"></label><br/>
+      <button type="submit">Crear OT</button>
+    </form>
+  </section>
+
+  <section>
+    <h3>OTs recientes</h3>
+    <ul id="ots_list"></ul>
+  </section>
+
+  <script src="/static/js/assign_ot.js"></script>
+{% endblock %}
