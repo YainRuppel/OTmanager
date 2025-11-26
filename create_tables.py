@@ -1,6 +1,6 @@
 # create_tables.py
-from database import engine, Base
-import models
+from .database import engine, Base
+from . import models
 
 # Esto crea SOLO las tablas que no existan aún, sin tocar datos existentes.
 if __name__ == "__main__":

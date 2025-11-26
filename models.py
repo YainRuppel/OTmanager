@@ -35,6 +35,8 @@ class OT(Base):
     fin = Column(DateTime, nullable=True)
     pendiente = Column(Boolean, default=False)              # si quedó pendiente
     procesoIntermedio = Column(Boolean, default=False)      # paso intermedio completado
+    observaciones = Column(String, nullable=True)
+
 
     # relaciones
     material = relationship("Material", back_populates="ots", foreign_keys=[sap_id])

@@ -40,6 +40,7 @@ def ui_assign_ot(request: Request):
 def redirect_docs():
     return RedirectResponse("/docs")
 
+
 # ------ API Endpoints existentes (resumo/uso) ------
 # Incluye los endpoints de materials, tecnicos y ots que ya tenías.
 # Pega aquí tus endpoints CRUD tal cual estaban; por ejemplo:
@@ -109,32 +110,58 @@ def delete_tecnico(tecnico_id: int, db: Session = Depends(get_db)):
     db.commit()
     return
 
-# OT endpoints (simplificado)
+
+
+# OTs endpoints
+from datetime import datetime, timezone
+from sqlalchemy.exc import IntegrityError
+
+# ---------- OT endpoints ----------
 @app.post("/ots/", response_model=schemas.OTOut, status_code=status.HTTP_201_CREATED)
 def create_ot(ot_in: schemas.OTCreate, db: Session = Depends(get_db)):
+    # validar material
     material = db.query(models.Material).filter(models.Material.sap == ot_in.sap_id).first()
     if not material:
         raise HTTPException(status_code=400, detail="Material (sap_id) no existe")
+
+    # validar tecnico si viene
     if ot_in.id_tecnico:
         tech = db.query(models.Tecnico).filter(models.Tecnico.id == ot_in.id_tecnico).first()
         if not tech:
             raise HTTPException(status_code=400, detail="Tecnico indicado no existe")
+
+    # validar id_ot único
     if db.query(models.OT).filter(models.OT.id_ot == ot_in.id_ot).first():
         raise HTTPException(status_code=400, detail="OT con ese id_ot ya existe")
+
+    # preparar datos (timezone-aware para inicio si hace falta)
     data = ot_in.dict()
     if not data.get("inicio"):
-        data["inicio"] = datetime.utcnow()
+        data["inicio"] = datetime.now(timezone.utc)
+
     ot = models.OT(**data)
     db.add(ot)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        # captura violaciones de UNIQUE u otros problemas
+        raise HTTPException(status_code=400, detail="Error al insertar OT (posible duplicado o constraint)")
+
     db.refresh(ot)
     return ot
 
-@app.get("/ots/", response_model=List[schemas.OTOut])
-def list_ots(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(models.OT).offset(skip).limit(limit).all()
 
-# health
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+from typing import List, Optional
+
+@app.get("/ots/", response_model=List[schemas.OTOut])
+def list_ots(skip: int = 0, limit: int = 100, proceso_intermedio: Optional[bool] = None, db: Session = Depends(get_db)):
+    """
+    Lista OTs. Opcionalmente filtra por procesoIntermedio (True/False).
+    Ejemplo: /ots/?proceso_intermedio=true
+    """
+    q = db.query(models.OT)
+    if proceso_intermedio is not None:
+        q = q.filter(models.OT.procesoIntermedio == proceso_intermedio)
+    return q.offset(skip).limit(limit).all()
