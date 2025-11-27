@@ -47,26 +47,37 @@ async function loadOts(){
 }
 
 // Manejo del form para crear OT
+// Manejo del form para crear OT
 document.getElementById('ot-form').addEventListener('submit', async (e)=>{
   e.preventDefault();
+  console.log("Enviando formulario…"); //debug
 
-  const id_ot = document.getElementById('id_ot').value.trim();
+  const submitBtn = document.querySelector('#ot-form button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.innerText = 'Creando...';
+
   const sap_id = document.getElementById('sap_select').value;
   const id_tecnico = document.getElementById('tec_select').value || null;
   const cantidad = Number(document.getElementById('cantidad').value) || 1;
   const procesoIntermedio = document.getElementById('procesoIntermedio').checked;
   const observaciones = document.getElementById('observaciones').value.trim() || null;
 
-  if(!id_ot || !sap_id) return alert('ID_OT y SAP son requeridos');
+  if(!sap_id){
+    alert('SAP es requerido');
+    submitBtn.disabled = false;
+    submitBtn.innerText = 'Crear OT';
+    return;
+  }
 
   const payload = {
-    id_ot,
     sap_id,
     id_tecnico: id_tecnico ? Number(id_tecnico) : null,
     cantidad,
     procesoIntermedio,
     observaciones
   };
+
+  console.log("Payload a enviar:", payload);
 
   try {
     const res = await fetch('/ots/', {
@@ -75,24 +86,36 @@ document.getElementById('ot-form').addEventListener('submit', async (e)=>{
       body: JSON.stringify(payload)
     });
 
-    if(res.ok){
+    const text = await res.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch(e){}
+
+    console.log("Fetch status:", res.status, "Respuesta:", parsed || text);
+
+    if (res.ok) {
+      console.log("OT creada correctamente");
       alert('OT creada');
-      // limpiar formulario (mantener selección de sap por si quiere crear varias)
-      document.getElementById('id_ot').value = '';
       document.getElementById('cantidad').value = '1';
       document.getElementById('procesoIntermedio').checked = false;
       document.getElementById('observaciones').value = '';
-      // recargar lista
       loadOts();
     } else {
-      const err = await res.json();
-      alert(err.detail || 'Error creando OT');
+      if (parsed && parsed.detail) {
+        console.error("Detalle de validación:", parsed.detail);
+        alert("Error: " + JSON.stringify(parsed.detail, null, 2));
+      } else {
+        alert("Error creando OT: " + (text || res.status));
+      }
     }
   } catch (err) {
-    console.error(err);
+    console.error("Fetch error:", err);
     alert('Error en la petición. Mirá la consola.');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerText = 'Crear OT';
   }
 });
+
 
 // inicialización
 (async function init(){
