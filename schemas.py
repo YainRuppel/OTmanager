@@ -40,8 +40,8 @@ class TecnicoOut(TecnicoBase):
 
 # OT
 # OT
+
 class OTBase(BaseModel):
-    id_ot: str
     sap_id: str
     id_tecnico: Optional[int] = None
     cantidad: int = 1
@@ -49,9 +49,10 @@ class OTBase(BaseModel):
     fin: Optional[datetime] = None
     pendiente: bool = False
     procesoIntermedio: bool = False
-    observaciones: Optional[str] = None  # ✔️ NUEVO CAMPO
+    observaciones: Optional[str] = None
 
 class OTCreate(OTBase):
+    # id_ot NO es requerido al crear: lo generamos en el servidor
     pass
 
 class OTUpdate(BaseModel):
@@ -60,10 +61,11 @@ class OTUpdate(BaseModel):
     pendiente: Optional[bool] = None
     procesoIntermedio: Optional[bool] = None
     id_tecnico: Optional[int] = None
-    observaciones: Optional[str] = None   # ✔️ NUEVO CAMPO
+    observaciones: Optional[str] = None
 
 class OTOut(OTBase):
     id: int
+    id_ot: str   # mostrar el id_ot generado
     class Config:
         orm_mode = True
 

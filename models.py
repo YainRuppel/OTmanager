@@ -26,15 +26,15 @@ class Tecnico(Base):
 
 class OT(Base):
     __tablename__ = "ots"
-    id = Column(Integer, primary_key=True, index=True)       # id interno
-    id_ot = Column(String, unique=True, nullable=False)      # ID_OT solicitado
-    sap_id = Column(String, ForeignKey("materials.sap"), nullable=False)  # referencia por codigo SAP
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)       # id interno autoincremental
+    id_ot = Column(String, unique=True, nullable=True)      # ahora nullable para insert inicial
+    sap_id = Column(String, ForeignKey("materials.sap"), nullable=False)
     id_tecnico = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
     cantidad = Column(Integer, default=1)
     inicio = Column(DateTime, default=datetime.utcnow)
     fin = Column(DateTime, nullable=True)
-    pendiente = Column(Boolean, default=False)              # si quedó pendiente
-    procesoIntermedio = Column(Boolean, default=False)      # paso intermedio completado
+    pendiente = Column(Boolean, default=False)
+    procesoIntermedio = Column(Boolean, default=False)
     observaciones = Column(String, nullable=True)
 
 

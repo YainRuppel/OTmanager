@@ -111,12 +111,10 @@ def delete_tecnico(tecnico_id: int, db: Session = Depends(get_db)):
     return
 
 
-
 # OTs endpoints
 from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 
-# ---------- OT endpoints ----------
 @app.post("/ots/", response_model=schemas.OTOut, status_code=status.HTTP_201_CREATED)
 def create_ot(ot_in: schemas.OTCreate, db: Session = Depends(get_db)):
     # validar material
@@ -124,32 +122,41 @@ def create_ot(ot_in: schemas.OTCreate, db: Session = Depends(get_db)):
     if not material:
         raise HTTPException(status_code=400, detail="Material (sap_id) no existe")
 
-    # validar tecnico si viene
+    # validar tecnico (si viene)
     if ot_in.id_tecnico:
         tech = db.query(models.Tecnico).filter(models.Tecnico.id == ot_in.id_tecnico).first()
         if not tech:
             raise HTTPException(status_code=400, detail="Tecnico indicado no existe")
 
-    # validar id_ot único
-    if db.query(models.OT).filter(models.OT.id_ot == ot_in.id_ot).first():
-        raise HTTPException(status_code=400, detail="OT con ese id_ot ya existe")
+    # 1) Insert inicial sin id_ot
+    ot = models.OT(
+        sap_id=ot_in.sap_id,
+        id_tecnico=ot_in.id_tecnico,
+        cantidad=ot_in.cantidad,
+        procesoIntermedio=ot_in.procesoIntermedio,
+        observaciones=ot_in.observaciones,
+        inicio=ot_in.inicio or datetime.now(timezone.utc),
+        pendiente=True
+    )
 
-    # preparar datos (timezone-aware para inicio si hace falta)
-    data = ot_in.dict()
-    if not data.get("inicio"):
-        data["inicio"] = datetime.now(timezone.utc)
-
-    ot = models.OT(**data)
     db.add(ot)
-
     try:
         db.commit()
-    except IntegrityError as e:
+        db.refresh(ot)  # ahora ot.id está disponible (PK asignada por la BD)
+    except IntegrityError:
         db.rollback()
-        # captura violaciones de UNIQUE u otros problemas
-        raise HTTPException(status_code=400, detail="Error al insertar OT (posible duplicado o constraint)")
+        raise HTTPException(status_code=400, detail="Error al insertar OT (duplicado o constraint)")
 
-    db.refresh(ot)
+    # 2) Generar id_ot basado en la PK y actualizar la fila (esto evita race conditions)
+    try:
+        ot.id_ot = f"OT-{ot.id:04d}"   # formato: OT-0001
+        db.add(ot)
+        db.commit()
+        db.refresh(ot)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Error al generar id_ot único")
+
     return ot
 
 
