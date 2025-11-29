@@ -52,8 +52,15 @@ class OTBase(BaseModel):
     observaciones: Optional[str] = None
 
 class OTCreate(OTBase):
-    # id_ot NO es requerido al crear: lo generamos en el servidor
-    pass
+    id_ot: Optional[str] = None     # <-- AGREGADO
+    sap_id: str
+    id_tecnico: Optional[int] = None
+    cantidad: int
+    observaciones: Optional[str] = None
+    inicio: Optional[datetime] = None
+    fin: Optional[datetime] = None
+    pendiente: bool = False
+    procesoIntermedio: bool = False
 
 class OTUpdate(BaseModel):
     cantidad: Optional[int] = None
