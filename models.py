@@ -33,7 +33,7 @@ class OT(Base):
     cantidad = Column(Integer, default=1)
     inicio = Column(DateTime, default=datetime.utcnow)
     fin = Column(DateTime, nullable=True)
-    pendiente = Column(Boolean, default=False)
+    pendiente = Column(Boolean, default=True)
     procesoIntermedio = Column(Boolean, default=False)
     observaciones = Column(String, nullable=True)
 

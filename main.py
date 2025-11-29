@@ -57,9 +57,28 @@ def create_material(material_in: schemas.MaterialCreate, db: Session = Depends(g
     db.refresh(m)
     return m
 
+from typing import Optional
+from sqlalchemy import or_
+
 @app.get("/materials/", response_model=List[schemas.MaterialOut])
-def list_materials(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return db.query(models.Material).offset(skip).limit(limit).all()
+def list_materials(skip: int = 0, limit: int = 100, sap: Optional[str] = None, q: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Listar materiales. Filtros:
+      - sap: buscar por código SAP (prefijo/contains)
+      - q: búsqueda por texto en breve_descripcion o descripcion
+    Ejemplo: /materials/?sap=40600&q=transmisor
+    """
+    qdb = db.query(models.Material)
+    if sap:
+        #  (búsqueda por prefijo -)
+       qdb = qdb.filter(models.Material.sap.ilike(f"{sap}%"))
+        
+    if q:
+        term = f"%{q}%"
+        qdb = qdb.filter(or_(models.Material.breve_descripcion.ilike(term),
+                             models.Material.descripcion.ilike(term)))
+    return qdb.offset(skip).limit(limit).all()
+
 
 @app.get("/materials/{material_id}", response_model=schemas.MaterialOut)
 def get_material(material_id: int, db: Session = Depends(get_db)):
@@ -111,53 +130,63 @@ def delete_tecnico(tecnico_id: int, db: Session = Depends(get_db)):
     return
 
 
-# OTs endpoints
-from datetime import datetime, timezone
-from sqlalchemy.exc import IntegrityError
 
-@app.post("/ots/", response_model=schemas.OTOut, status_code=status.HTTP_201_CREATED)
+# ---------- OT endpoints ----------
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
+
+@app.post("/ots/", response_model=schemas.OTOut, status_code=201)
 def create_ot(ot_in: schemas.OTCreate, db: Session = Depends(get_db)):
-    # validar material
+
+    # validaciones previas
     material = db.query(models.Material).filter(models.Material.sap == ot_in.sap_id).first()
     if not material:
         raise HTTPException(status_code=400, detail="Material (sap_id) no existe")
 
-    # validar tecnico (si viene)
     if ot_in.id_tecnico:
         tech = db.query(models.Tecnico).filter(models.Tecnico.id == ot_in.id_tecnico).first()
         if not tech:
             raise HTTPException(status_code=400, detail="Tecnico indicado no existe")
 
-    # 1) Insert inicial sin id_ot
+    # 1) Insert inicial — usamos un id_ot temporal (timestamp) para cumplir constraints si existen
+    temp_id_ot = ot_in.id_ot or f"OT-{int(datetime.now().timestamp())}"
+
     ot = models.OT(
+        id_ot=temp_id_ot,
         sap_id=ot_in.sap_id,
         id_tecnico=ot_in.id_tecnico,
         cantidad=ot_in.cantidad,
-        procesoIntermedio=ot_in.procesoIntermedio,
         observaciones=ot_in.observaciones,
         inicio=ot_in.inicio or datetime.now(timezone.utc),
-        pendiente=True
+        pendiente=True,  # aseguramos que pendiente sea True al crear   
+        procesoIntermedio=ot_in.procesoIntermedio
     )
 
     db.add(ot)
     try:
         db.commit()
-        db.refresh(ot)  # ahora ot.id está disponible (PK asignada por la BD)
+        db.refresh(ot)   # ahora ot.id contiene la PK real
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Error al insertar OT (duplicado o constraint)")
+        raise HTTPException(status_code=400, detail="Error al insertar OT (constraint)")
 
-    # 2) Generar id_ot basado en la PK y actualizar la fila (esto evita race conditions)
-    try:
-        ot.id_ot = f"OT-{ot.id:04d}"   # formato: OT-0001
-        db.add(ot)
-        db.commit()
-        db.refresh(ot)
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Error al generar id_ot único")
+    # 2) Generar id_ot definitivo basado en la PK autoincremental
+    generated_id_ot = f"OT-{ot.id:04d}"
+
+    # Si ya coincide con el temporal no hace falta actualizar
+    if ot.id_ot != generated_id_ot:
+        ot.id_ot = generated_id_ot
+        try:
+            db.commit()
+            db.refresh(ot)
+        except IntegrityError:
+            # Si falla el update por unique (raro), hacemos rollback y dejamos el id temporal
+            db.rollback()
+            # opcional: loggear el problema en consola
+            print("Warning: no se pudo actualizar id_ot a formato secuencial; se mantiene temporal.", generated_id_ot)
 
     return ot
+
 
 
 from typing import List, Optional

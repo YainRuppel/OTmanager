@@ -6,10 +6,32 @@
     <h3>Crear OT</h3>
     <form id="ot-form">
       <br/>
-      <label>Material (SAP):
-        <select id="sap_select"></select><br>
 
-      </label><br/>
+      <!-- SEARCH -->
+<div id="materials-search" style="margin-bottom:10px;">
+  <label>Buscar por SAP:
+    <input id="search_sap" type="text" placeholder="Ej: 40600" autocomplete="off" />
+  </label>
+
+  <label style="margin-left:12px;">Buscar por descripción:
+    <input id="search_q" type="text" placeholder="Ej: transmisor" />
+  </label>
+</div>
+
+<!-- lista dinámica de resultados -->
+<ul id="materials_results"
+    style="margin-top:8px; list-style:none; padding-left:0; border:1px solid #ddd; max-height:240px; overflow:auto;">
+</ul>
+
+<label>Material (SAP):
+  <select id="sap_select">
+    <option value="">-- Seleccionar SAP --</option>
+  </select>
+</label>
+<br>
+<br>
+<br>
+
       <label>Técnico:
         <select id="tec_select"></select><br>
       </label><br/>
