@@ -132,58 +132,58 @@ def delete_tecnico(tecnico_id: int, db: Session = Depends(get_db)):
 
 
 # ---------- OT endpoints ----------
-from sqlalchemy.exc import IntegrityError
+
 from datetime import datetime, timezone
+from sqlalchemy.exc import IntegrityError
 
 @app.post("/ots/", response_model=schemas.OTOut, status_code=201)
 def create_ot(ot_in: schemas.OTCreate, db: Session = Depends(get_db)):
-
-    # validaciones previas
+    # validar material
     material = db.query(models.Material).filter(models.Material.sap == ot_in.sap_id).first()
     if not material:
         raise HTTPException(status_code=400, detail="Material (sap_id) no existe")
 
+    # validar tecnico si viene
     if ot_in.id_tecnico:
         tech = db.query(models.Tecnico).filter(models.Tecnico.id == ot_in.id_tecnico).first()
         if not tech:
             raise HTTPException(status_code=400, detail="Tecnico indicado no existe")
 
-    # 1) Insert inicial — usamos un id_ot temporal (timestamp) para cumplir constraints si existen
-    temp_id_ot = ot_in.id_ot or f"OT-{int(datetime.now().timestamp())}"
-
+    # crear instancia SIN id_ot (nullable) para obtener id autoincremental
     ot = models.OT(
-        id_ot=temp_id_ot,
         sap_id=ot_in.sap_id,
         id_tecnico=ot_in.id_tecnico,
         cantidad=ot_in.cantidad,
         observaciones=ot_in.observaciones,
+        procesoIntermedio=ot_in.procesoIntermedio,
+        # inicio tomará default si se pasa None; si querés timezone-aware explícito:
         inicio=ot_in.inicio or datetime.now(timezone.utc),
-        pendiente=True,  # aseguramos que pendiente sea True al crear   
-        procesoIntermedio=ot_in.procesoIntermedio
+        pendiente=True  # por defecto pendiente = True
     )
 
     db.add(ot)
     try:
+        # primer commit para que la BD asigne el id autoincremental
         db.commit()
-        db.refresh(ot)   # ahora ot.id contiene la PK real
+        db.refresh(ot)
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Error al insertar OT (constraint)")
+        raise HTTPException(status_code=400, detail="Error al insertar OT (posible constraint)")
 
-    # 2) Generar id_ot definitivo basado en la PK autoincremental
-    generated_id_ot = f"OT-{ot.id:04d}"
-
-    # Si ya coincide con el temporal no hace falta actualizar
-    if ot.id_ot != generated_id_ot:
-        ot.id_ot = generated_id_ot
-        try:
-            db.commit()
-            db.refresh(ot)
-        except IntegrityError:
-            # Si falla el update por unique (raro), hacemos rollback y dejamos el id temporal
-            db.rollback()
-            # opcional: loggear el problema en consola
-            print("Warning: no se pudo actualizar id_ot a formato secuencial; se mantiene temporal.", generated_id_ot)
+    # ahora tenemos ot.id; generamos id_ot legible y lo guardamos
+    try:
+        # formato: OT-0001 (4 dígitos) — ajustá f-string si querés otro formato
+        ot.id_ot = f"OT-{ot.id:04d}"
+        db.add(ot)
+        db.commit()
+        db.refresh(ot)
+    except IntegrityError:
+        db.rollback()
+        # si por alguna razón chocó con unique (muy raro), generamos con timestamp
+        ot.id_ot = f"OT-{int(datetime.now().timestamp())}"
+        db.add(ot)
+        db.commit()
+        db.refresh(ot)
 
     return ot
 
@@ -201,3 +201,70 @@ def list_ots(skip: int = 0, limit: int = 100, proceso_intermedio: Optional[bool]
     if proceso_intermedio is not None:
         q = q.filter(models.OT.procesoIntermedio == proceso_intermedio)
     return q.offset(skip).limit(limit).all()
+
+######################################################################################################################
+# ---------------------------
+# ADMIN: endpoints para administración de OTs
+# ---------------------------
+# --- ADMIN: endpoints y UI ---
+from typing import List, Optional
+from fastapi import Request
+
+# UI para admin (plantilla)
+@app.get("/ui/admin_ots", response_class=HTMLResponse)
+def ui_admin_ots(request: Request):
+    return templates.TemplateResponse("admin_ots.html", {"request": request})
+
+# Lista OTs pendientes (con filtros opcionales)
+@app.get("/admin/ots/pending", response_model=List[schemas.OTOut])
+def admin_list_pending(sap: Optional[str] = None, tec: Optional[str] = None, skip: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    q = db.query(models.OT).filter(models.OT.pendiente == True)
+    if sap:
+        q = q.filter(models.OT.sap_id.ilike(f"%{sap}%"))
+    if tec:
+        # filtrar por id_tecnico si tec es numérico, o por nombre (join) si no
+        try:
+            t_id = int(tec)
+            q = q.filter(models.OT.id_tecnico == t_id)
+        except ValueError:
+            q = q.join(models.Tecnico).filter(models.Tecnico.nombre.ilike(f"%{tec}%"))
+    return q.order_by(models.OT.inicio.desc()).offset(skip).limit(limit).all()
+
+# Últimas N OTs cerradas
+@app.get("/admin/ots/closed", response_model=List[schemas.OTOut])
+def admin_list_closed(limit: int = 10, db: Session = Depends(get_db)):
+    q = db.query(models.OT).filter(models.OT.pendiente == False)
+    return q.order_by(models.OT.fin.desc().nullslast()).limit(limit).all()
+
+# Resumen: cantidad por material de OTs con procesoIntermedio = True (simple)
+@app.get("/admin/ots/summary")
+def admin_summary(db: Session = Depends(get_db)):
+    # devolvemos lista de {sap_id, total_proceso}
+    from sqlalchemy import func
+    rows = db.query(models.OT.sap_id, func.count(models.OT.id).label("total")).filter(models.OT.procesoIntermedio == True).group_by(models.OT.sap_id).all()
+    return [{"sap_id": r[0], "total": r[1]} for r in rows]
+
+# Cerrar OT -> marcar pendiente = False y poner fin = ahora()
+@app.post("/admin/ots/{ot_id}/close")
+def admin_close_ot(ot_id: int, db: Session = Depends(get_db)):
+    ot = db.query(models.OT).filter(models.OT.id == ot_id).first()
+    if not ot:
+        raise HTTPException(status_code=404, detail="OT no encontrada")
+    ot.pendiente = False
+    from datetime import datetime, timezone
+    ot.fin = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ot)
+    return {"status": "ok", "ot": ot}
+
+# Actualizar OT (PUT) — permite editar observaciones, pendiente, fin, cantidad, id_tecnico
+@app.put("/admin/ots/{ot_id}", response_model=schemas.OTOut)
+def admin_update_ot(ot_id: int, ot_in: schemas.OTUpdate, db: Session = Depends(get_db)):
+    ot = db.query(models.OT).filter(models.OT.id == ot_id).first()
+    if not ot:
+        raise HTTPException(status_code=404, detail="OT no encontrada")
+    for k, v in ot_in.dict(exclude_unset=True).items():
+        setattr(ot, k, v)
+    db.commit()
+    db.refresh(ot)
+    return ot
