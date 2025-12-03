@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Administración de OTs</h2>
+
+  <section>
+    <h3>OTs pendientes</h3>
+    <div>
+      Filtrar SAP: <input id="admin_filter_sap" placeholder="40600..." />
+      Filtrar técnico: <input id="admin_filter_tec" placeholder="nombre o id" />
+      <button id="admin_apply_filters">Aplicar</button>
+      <button id="admin_clear_filters">Limpiar</button>
+    </div>
+
+    <table id="admin_pending_table" style="width:100%; border-collapse:collapse; margin-top:8px;">
+      <thead>
+        <tr>
+          <th>ID</th><th>OT</th><th>SAP</th><th>Cantidad</th><th>Técnico</th><th>Inicio</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h3>Últimas OTs cerradas</h3>
+    <ul id="admin_closed_list"></ul>
+  </section>
+
+  <hr/>
+
+  <section>
+    <h3>Resumen - OTs con procesoIntermedio</h3>
+    <ul id="admin_summary"></ul>
+  </section>
+
+  <script src="/static/js/admin_ots.js"></script>
+{% endblock %}
